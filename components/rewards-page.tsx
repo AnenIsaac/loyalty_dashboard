@@ -409,6 +409,34 @@ useEffect(() => {
     }
   }, [business?.id, rewards.length])
 
+  // Load rewards budget when business and rewards are available
+  useEffect(() => {
+    if (business?.id && rewards.length > 0) {
+      calculateRewardsBudget().then(setRewardsBudget)
+    }
+  }, [business?.id, rewards.length])
+
+  // Load amount spent this month when business is available
+  useEffect(() => {
+    if (business?.id) {
+      calculateAmountSpentThisMonth().then(setAmountSpentThisMonth)
+    }
+  }, [business?.id])
+
+  // Load ROI this month when business is available
+  useEffect(() => {
+    if (business?.id) {
+      calculateROIThisMonth().then(setROIThisMonth)
+    }
+  }, [business?.id])
+
+  // Load most popular reward when business is available
+  useEffect(() => {
+    if (business?.id) {
+      getMostPopularRewardThisMonth().then(setMostPopularReward)
+    }
+  }, [business?.id])
+
   // Enhanced statistics calculation functions
   const calculateRewardsBudget = async () => {
     if (!business?.id || rewards.length === 0) return 0
