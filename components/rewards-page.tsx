@@ -344,7 +344,7 @@ useEffect(() => {
         .select('id')
         .eq('business_id', business.id)
         .eq('status', 'redeemed')
-        .gte('redeemed_at', new Date().toISOString())
+        .not('bought_at', 'is', null).gte('bought_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
 
       if (error) {
         console.error('Error loading weekly redemptions:', error)
@@ -478,12 +478,12 @@ useEffect(() => {
         .from('reward_codes')
         .select(`
           reward_id,
-          redeemed_at,
+          bought_at,
           rewards!inner(cost)
         `)
         .eq('business_id', business.id)
         .eq('status', 'redeemed')
-        .gte('redeemed_at', new Date().toISOString())
+        .not('bought_at', 'is', null).gte('bought_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
 
       if (error) {
         console.error('Error calculating amount spent this month:', error)
@@ -519,7 +519,7 @@ useEffect(() => {
         .eq('business_id', business.id)
         .eq('status', 'redeemed')
         .not('customer_id', 'is', null)
-        .gte('bought_at', new Date().toISOString())
+        .not('bought_at', 'is', null).gte('bought_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
 
       if (error) {
         console.error('Error calculating ROI this month:', error)
@@ -578,7 +578,7 @@ useEffect(() => {
         `)
         .eq('business_id', business.id)
         .eq('status', 'redeemed')
-        .gte('redeemed_at', new Date().toISOString())
+        .not('bought_at', 'is', null).gte('bought_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
 
       if (error) {
         console.error('Error getting most popular reward:', error)
@@ -1241,8 +1241,11 @@ useEffect(() => {
 
   // Utility function to format large numbers with K notation
   const formatNumber = (num: number) => {
-    if (num >= 100000) {
-      return Math.round(num / 1000) + "K"
+    if (num >= 1000000) {
+      return (num / 1000000).toFixed(1).replace(/\.0$/, "") + "M"
+    }
+    if (num >= 1000) {
+      return (num / 1000).toFixed(1).replace(/\.0$/, "") + "K"
     }
     return num.toLocaleString()
   }
