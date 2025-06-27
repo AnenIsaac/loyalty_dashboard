@@ -85,18 +85,11 @@ export function validateSignUpForm(data: SignUpData & { confirmPassword: string 
     errors.email = 'Please enter a valid email address'
   }
 
-  // Phone validation
+  // Phone validation - only check for valid +255 format
   if (!data.phone.trim()) {
     errors.phone = 'Phone number is required'
   } else if (!validatePhone(data.phone)) {
     errors.phone = 'Please enter a valid Tanzanian phone number starting with +255'
-  }
-
-  // WhatsApp validation
-  if (!data.whatsapp.trim()) {
-    errors.whatsapp = 'WhatsApp is required'
-  } else if (!validateWhatsApp(data.whatsapp)) {
-    errors.whatsapp = 'Please enter a valid WhatsApp number or username'
   }
 
   // Password validation
@@ -135,4 +128,4 @@ export function validateSignInForm(data: SignInData): ValidationResult {
     isValid: Object.keys(errors).length === 0,
     errors
   }
-} 
+}

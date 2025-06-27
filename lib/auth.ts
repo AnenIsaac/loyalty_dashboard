@@ -1,9 +1,7 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabaseClient'
 import type { SignUpData, SignInData, AuthError } from '@/types/auth'
 
 export async function signUp({ email, password, phone }: SignUpData) {
-  const supabase = createClientComponentClient()
-  
   try {
     console.log('Starting signup process for:', email)
     
@@ -61,8 +59,6 @@ export async function signUp({ email, password, phone }: SignUpData) {
 }
 
 export async function signIn({ email, password }: SignInData) {
-  const supabase = createClientComponentClient()
-  
   try {
     console.log('Starting sign in process for:', email)
     
@@ -107,33 +103,30 @@ export async function signIn({ email, password }: SignInData) {
       .eq('user_id', authData.user?.id)
       .single()
 
-    if (businessError && businessError.code !== 'PGRST116') { // PGRST116 is the 'not found' error code
+    if (businessError && businessError.code !== 'PGRST116') {
       console.error('Business check error:', businessError)
-      throw businessError
+      // Don't throw here, just log and continue
     }
 
-    const hasBusiness = businessData !== null
-    console.log('Business check result:', { hasBusiness, businessId: businessData?.id })
+    const hasBusiness = !!businessData
+
+    console.log('Sign in completed:', { 
+      userId: authData.user.id,
+      hasBusiness
+    })
 
     return { 
-      data: authData, 
+      data: { user: authData.user }, 
       error: null, 
       hasBusiness 
     }
-
   } catch (error: any) {
     console.error('Sign in process failed:', error)
-    return { 
-      data: null, 
-      error: { message: error.message } as AuthError,
-      hasBusiness: false
-    }
+    return { data: null, error: { message: error.message } as AuthError, hasBusiness: false }
   }
 }
 
 export async function signOut() {
-  const supabase = createClientComponentClient()
-  
   try {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
@@ -151,8 +144,6 @@ export async function signOut() {
 }
 
 export async function resetPassword(email: string) {
-  const supabase = createClientComponentClient()
-  
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/auth/reset-password`,
@@ -165,36 +156,36 @@ export async function resetPassword(email: string) {
   }
 }
 
-// Add OTP verification function
-export async function verifyOtp(email: string, token: string) {
-  const supabase = createClientComponentClient()
-  
+export async function updatePassword(newPassword: string) {
   try {
-    console.log('Verifying OTP for:', email)
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword
+    })
     
+    if (error) throw error
+    return { error: null }
+  } catch (error: any) {
+    return { error: { message: error.message } as AuthError }
+  }
+}
+
+export async function verifyOtp(email: string, token: string) {
+  try {
     const { data, error } = await supabase.auth.verifyOtp({
       email,
       token,
-      type: 'signup'
+      type: 'email'
     })
-
-    if (error) {
-      console.error('OTP verification error:', error)
-      throw new Error(error.message)
-    }
-
-    console.log('OTP verification successful')
+    
+    if (error) throw error
     return { data, error: null }
   } catch (error: any) {
-    console.error('OTP verification failed:', error)
     return { data: null, error: { message: error.message } as AuthError }
   }
 }
 
 // Add resend OTP function
 export async function resendOtp(email: string) {
-  const supabase = createClientComponentClient()
-  
   try {
     console.log('Resending OTP for:', email)
     

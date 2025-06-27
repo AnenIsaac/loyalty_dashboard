@@ -1,7 +1,7 @@
 'use client'
 
 import { Sidebar } from "@/components/sidebar"
-import { useAuth } from '@/hooks/useAuth'
+import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react'
 import { useEffect } from 'react'
 
 export default function ProtectedLayout({
@@ -9,15 +9,18 @@ export default function ProtectedLayout({
 }: {
   children: React.ReactNode
 }) {
-  const { user, isLoading, error } = useAuth()
+  const session = useSession()
+  const supabase = useSupabaseClient()
+  const user = session?.user
+  const isLoading = !session && typeof window !== 'undefined' // Simple loading check
 
   useEffect(() => {
     console.log('ProtectedLayout - Auth state:', { 
       hasUser: !!user, 
       isLoading, 
-      error: error?.substring(0, 50) 
+      sessionExists: !!session
     })
-  }, [user, isLoading, error])
+  }, [user, isLoading, session])
 
   if (isLoading) {
     console.log('ProtectedLayout - Showing loading spinner')
@@ -28,14 +31,11 @@ export default function ProtectedLayout({
     )
   }
 
-  if (error) {
-    console.log('ProtectedLayout - Auth error:', error)
+  if (!session) {
+    console.log('ProtectedLayout - No session, middleware should handle redirect')
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="text-red-600 mb-4">Authentication Error</p>
-          <p className="text-sm text-gray-500">{error}</p>
-        </div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#F8843A]"></div>
       </div>
     )
   }

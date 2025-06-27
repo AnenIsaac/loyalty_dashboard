@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,6 +16,7 @@ import { Upload, X, Loader2 } from "lucide-react"
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Business } from "@/types/common"
 import { createReward, updateReward, getDefaultTerms, type Reward, type RewardFormData } from "@/lib/rewards"
+import { supabase } from '@/lib/supabaseClient'
 
 export interface Reward {
   id: string
@@ -258,7 +259,7 @@ export function AddEditRewardModal({ open, onOpenChange, reward, business, setti
     }
     
     setIsLoading(true)
-    const supabase = createClientComponentClient()
+    // Using shared supabase client
     
     try {
       let imageUrl = formData.imageUrl

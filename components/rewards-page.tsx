@@ -12,7 +12,7 @@ import { CodeGenerationModal } from "./code-generation-modal"
 import { PromotionsTab } from "./promotions-tab"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/components/ui/use-toast"
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabaseClient'
 import type { Business } from "@/types/common"
 
 interface ZawadiiSettings {
@@ -88,7 +88,6 @@ export function RewardsPage() {
       }
 
       console.log('Loading rewards for business:', business.id)
-      const supabase = createClientComponentClient()
       
       const { data: rewardsData, error: rewardsError } = await supabase
         .from('rewards')
@@ -163,8 +162,6 @@ export function RewardsPage() {
 
   useEffect(() => {
     const fetchUserAndBusiness = async () => {
-      const supabase = createClientComponentClient()
-      
       try {
         // Get current user
         const { data: { user: currentUser } } = await supabase.auth.getUser()
@@ -275,16 +272,12 @@ export function RewardsPage() {
     console.log('Loading code counts for business:', business.id, 'with rewards:', rewards.map(r => r.id))
 
     try {
-      const supabase = createClientComponentClient()
-      
-      // Get count of unused codes for each reward
-      const rewardIds = rewards.map(r => r.id)
       const { data: codeData, error } = await supabase
         .from('reward_codes')
         .select('reward_id')
         .eq('business_id', business.id)
         .eq('status', 'unused')
-        .in('reward_id', rewardIds)
+        .in('reward_id', rewards.map(r => r.id))
 
       if (error) {
         console.error('Error loading code counts:', error)
@@ -295,7 +288,7 @@ export function RewardsPage() {
 
       // Count codes per reward
       const counts: { [rewardId: string]: number } = {}
-      rewardIds.forEach(id => counts[id] = 0)
+      rewards.forEach(r => counts[r.id] = 0)
       
       codeData?.forEach(code => {
         counts[code.reward_id] = (counts[code.reward_id] || 0) + 1
@@ -315,16 +308,12 @@ export function RewardsPage() {
     console.log('Refreshing redemption counts for business:', business.id)
 
     try {
-      const supabase = createClientComponentClient()
-      
-      // Get redemption counts for all rewards
-      const rewardIds = rewards.map(r => r.id)
       const { data: redemptionData, error: redemptionError } = await supabase
         .from('reward_codes')
         .select('reward_id')
         .eq('business_id', business.id)
         .eq('status', 'redeemed')
-        .in('reward_id', rewardIds)
+        .in('reward_id', rewards.map(r => r.id))
 
       if (redemptionError) {
         console.error('Error loading redemption counts:', redemptionError)
@@ -335,7 +324,7 @@ export function RewardsPage() {
 
       // Count redemptions per reward
       const redemptionCounts: { [rewardId: string]: number } = {}
-      rewardIds.forEach(id => redemptionCounts[id] = 0)
+      rewards.forEach(r => redemptionCounts[r.id] = 0)
       
       redemptionData?.forEach(redemption => {
         redemptionCounts[redemption.reward_id] = (redemptionCounts[redemption.reward_id] || 0) + 1
@@ -360,18 +349,12 @@ export function RewardsPage() {
     if (!business?.id) return 0
 
     try {
-      const supabase = createClientComponentClient()
-      
-      // Get redemptions from the last 7 days
-      const weekAgo = new Date()
-      weekAgo.setDate(weekAgo.getDate() - 7)
-      
       const { data: weeklyData, error } = await supabase
         .from('reward_codes')
         .select('id')
         .eq('business_id', business.id)
         .eq('status', 'redeemed')
-        .gte('redeemed_at', weekAgo.toISOString())
+        .gte('redeemed_at', new Date().toISOString())
 
       if (error) {
         console.error('Error loading weekly redemptions:', error)
@@ -397,9 +380,6 @@ export function RewardsPage() {
     if (!business?.id) return 0
 
     try {
-      const supabase = createClientComponentClient()
-      
-      // Get total codes generated
       const { data: totalCodes, error: totalError } = await supabase
         .from('reward_codes')
         .select('id')
@@ -444,9 +424,6 @@ export function RewardsPage() {
     if (!business?.id || rewards.length === 0) return 0
 
     try {
-      const supabase = createClientComponentClient()
-      
-      // Get all unused codes with their reward costs
       const { data: codeData, error } = await supabase
         .from('reward_codes')
         .select(`
@@ -479,13 +456,6 @@ export function RewardsPage() {
     if (!business?.id) return 0
 
     try {
-      const supabase = createClientComponentClient()
-      
-      // Get start of current month
-      const now = new Date()
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-      
-      // Get redemptions from this month with reward costs
       const { data: redemptionData, error } = await supabase
         .from('reward_codes')
         .select(`
@@ -495,7 +465,7 @@ export function RewardsPage() {
         `)
         .eq('business_id', business.id)
         .eq('status', 'redeemed')
-        .gte('redeemed_at', startOfMonth.toISOString())
+        .gte('redeemed_at', new Date().toISOString())
 
       if (error) {
         console.error('Error calculating amount spent this month:', error)
@@ -520,13 +490,6 @@ export function RewardsPage() {
     if (!business?.id) return 0
 
     try {
-      const supabase = createClientComponentClient()
-      
-      // Get start of current month
-      const now = new Date()
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-      
-      // Get redemptions from this month where customer_id is not null (customer bought it)
       const { data: redemptionData, error } = await supabase
         .from('reward_codes')
         .select(`
@@ -538,7 +501,7 @@ export function RewardsPage() {
         .eq('business_id', business.id)
         .eq('status', 'redeemed')
         .not('customer_id', 'is', null)
-        .gte('bought_at', startOfMonth.toISOString())
+        .gte('bought_at', new Date().toISOString())
 
       if (error) {
         console.error('Error calculating ROI this month:', error)
@@ -589,13 +552,6 @@ export function RewardsPage() {
     if (!business?.id) return 'None'
 
     try {
-      const supabase = createClientComponentClient()
-      
-      // Get start of current month
-      const now = new Date()
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-      
-      // Get redemptions from this month grouped by reward
       const { data: redemptionData, error } = await supabase
         .from('reward_codes')
         .select(`
@@ -604,7 +560,7 @@ export function RewardsPage() {
         `)
         .eq('business_id', business.id)
         .eq('status', 'redeemed')
-        .gte('redeemed_at', startOfMonth.toISOString())
+        .gte('redeemed_at', new Date().toISOString())
 
       if (error) {
         console.error('Error getting most popular reward:', error)
@@ -650,11 +606,6 @@ export function RewardsPage() {
 
     setIsLoadingCodes(true)
     try {
-      const supabase = createClientComponentClient()
-      
-      // First try a simpler query to see if there are any issues
-      console.log('Loading codes for business:', business.id)
-      
       const { data: codesData, error } = await supabase
         .from('reward_codes')
         .select(`
@@ -677,7 +628,6 @@ export function RewardsPage() {
         })
         
         // Try a simpler query without customers join
-        console.log('Trying simpler query without customers...')
         const { data: simpleCodes, error: simpleError } = await supabase
           .from('reward_codes')
           .select(`
@@ -1103,8 +1053,6 @@ export function RewardsPage() {
         throw new Error('Business ID not available')
       }
 
-      const supabase = createClientComponentClient()
-      
       // Get the reward name for the dialog
       const reward = rewards.find(r => r.id === id)
       if (!reward) {
@@ -1312,8 +1260,6 @@ export function RewardsPage() {
 
     setIsGeneratingCodes(true)
     try {
-      const supabase = createClientComponentClient()
-      
       // Get reward code (first 3 letters of meaningful part of reward name)
       const generateRewardCode = (rewardName: string): string => {
         // Remove common prefixes and clean the name
@@ -1416,10 +1362,6 @@ export function RewardsPage() {
       }
 
       console.log('Generated codes to insert:', codesToInsert)
-
-      // Check current user authentication status
-      const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser()
-      console.log('Current user for insertion:', currentUser?.id, 'Auth error:', authError)
 
       // Test database connection first
       console.log('Testing database connection...')
@@ -1552,8 +1494,6 @@ export function RewardsPage() {
     if (!codeToDelete || !business?.id) return
 
     try {
-      const supabase = createClientComponentClient()
-      
       const { error } = await supabase
         .from('reward_codes')
         .delete()
@@ -1694,9 +1634,6 @@ export function RewardsPage() {
       setIsVerifyingPassword(true)
       
       try {
-        const supabase = createClientComponentClient()
-        
-        // Verify admin password
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email: user?.email || '',
           password: adminPassword
@@ -1727,8 +1664,6 @@ export function RewardsPage() {
     }
 
     try {
-      const supabase = createClientComponentClient()
-      
       console.log('Bulk deleting codes:', {
         unused: selectedUnusedCodes.map(c => c.code),
         bought: selectedBoughtCodes.map(c => c.code)

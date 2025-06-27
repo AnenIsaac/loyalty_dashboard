@@ -4,9 +4,8 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { BarChart, Users, Gift, Briefcase, HelpCircle, Settings, LifeBuoy, LogOut, Building2 } from "lucide-react"
 import Image from "next/image"
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/hooks/useAuth'
+import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react'
 import { signOut } from '@/lib/auth'
 
 interface BusinessData {

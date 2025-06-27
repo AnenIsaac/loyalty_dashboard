@@ -1,9 +1,8 @@
 "use client"
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { useAuth } from "@/hooks/useAuth"
 import { useBusiness } from "@/hooks/useBusiness"
 import { LoadingComponent } from "@/components/ui/loading-component"
 import { ErrorComponent } from "@/components/ui/error-component"
@@ -11,11 +10,14 @@ import { BusinessProfilePage } from "@/components/business-profile-page"
 
 export default function Page() {
   const router = useRouter()
-  const { user, isLoading: authLoading, error: authError } = useAuth()
+  const session = useSession()
+  const supabase = useSupabaseClient()
+  const user = session?.user
+  const isAuthLoading = !session && typeof window !== 'undefined'
   const { business, isLoading: businessLoading, error: businessError } = useBusiness(user?.id || '')
 
-  const isLoading = authLoading || businessLoading
-  const error = authError || businessError
+  const isLoading = isAuthLoading || businessLoading
+  const error = businessError
 
   if (isLoading) {
     return (

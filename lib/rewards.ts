@@ -1,17 +1,38 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabaseClient'
 
 export interface Reward {
   id: string
-  created_at: string
   business_id: string
-  title: string
-  description: string | null
+  name: string
+  description: string
   points_required: number
-  cost: number | null
+  image_url?: string
+  category: string
   is_active: boolean
-  image_url: string | null
-  terms_and_conditions: string | null
-  uses_default_terms: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface RewardCode {
+  id: string
+  reward_id: string
+  code: string
+  customer_id?: string
+  is_used: boolean
+  used_at?: string
+  created_at: string
+  expires_at?: string
+  status?: 'available' | 'used' | 'expired' | 'pending'
+}
+
+export interface RewardRedemption {
+  id: string
+  customer_id: string
+  reward_id: string
+  points_used: number
+  status: 'pending' | 'completed' | 'cancelled'
+  created_at: string
+  reward?: Reward
 }
 
 export interface RewardFormData {
@@ -32,8 +53,6 @@ export async function uploadRewardImage(
   file: File,
   rewardId?: string
 ): Promise<{ url: string | null; error: string | null }> {
-  const supabase = createClientComponentClient()
-  
   try {
     // Generate unique filename
     const fileExt = file.name.split('.').pop()
@@ -68,186 +87,199 @@ export async function uploadRewardImage(
   }
 }
 
-// Create new reward
-export async function createReward(
-  businessId: string,
-  formData: RewardFormData
-): Promise<{ data: Reward | null; error: string | null }> {
-  const supabase = createClientComponentClient()
-  
-  try {
-    let imageUrl = null
-    
-    // Handle image upload if there's an image
-    if (formData.imageUrl && formData.imageUrl.startsWith('data:')) {
-      // Convert base64 to File
-      const response = await fetch(formData.imageUrl)
-      const blob = await response.blob()
-      const file = new File([blob], 'reward-image.jpg', { type: blob.type })
-      
-      const { url, error: uploadError } = await uploadRewardImage(businessId, file)
-      if (uploadError) {
-        return { data: null, error: uploadError }
-      }
-      imageUrl = url
-    }
-
-    // Prepare reward data for database
-    const rewardData = {
-      business_id: businessId,
-      title: formData.name,
-      description: formData.description,
-      points_required: formData.points,
-      cost: formData.cost,
-      is_active: formData.status === 'active',
-      image_url: imageUrl,
-      terms_and_conditions: formData.useDefaultTerms ? null : formData.termsAndConditions,
-      uses_default_terms: formData.useDefaultTerms
-    }
-
-    // Insert reward into database
-    const { data, error } = await supabase
-      .from('rewards')
-      .insert(rewardData)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Database error:', error)
-      return { data: null, error: error.message }
-    }
-
-    return { data, error: null }
-  } catch (error: any) {
-    console.error('Create reward failed:', error)
-    return { data: null, error: error.message }
-  }
-}
-
-// Update existing reward
-export async function updateReward(
-  businessId: string,
-  rewardId: string,
-  formData: RewardFormData
-): Promise<{ data: Reward | null; error: string | null }> {
-  const supabase = createClientComponentClient()
-  
-  try {
-    let imageUrl = formData.imageUrl
-
-    // Handle image upload if there's a new image
-    if (formData.imageUrl && formData.imageUrl.startsWith('data:')) {
-      // Convert base64 to File
-      const response = await fetch(formData.imageUrl)
-      const blob = await response.blob()
-      const file = new File([blob], 'reward-image.jpg', { type: blob.type })
-      
-      const { url, error: uploadError } = await uploadRewardImage(businessId, file, rewardId)
-      if (uploadError) {
-        return { data: null, error: uploadError }
-      }
-      imageUrl = url
-    }
-
-    // Prepare reward data for database
-    const rewardData = {
-      title: formData.name,
-      description: formData.description,
-      points_required: formData.points,
-      cost: formData.cost,
-      is_active: formData.status === 'active',
-      image_url: imageUrl,
-      terms_and_conditions: formData.useDefaultTerms ? null : formData.termsAndConditions,
-      uses_default_terms: formData.useDefaultTerms
-    }
-
-    // Update reward in database
-    const { data, error } = await supabase
-      .from('rewards')
-      .update(rewardData)
-      .eq('id', rewardId)
-      .eq('business_id', businessId)
-      .select()
-      .single()
-
-    if (error) {
-      console.error('Database error:', error)
-      return { data: null, error: error.message }
-    }
-
-    return { data, error: null }
-  } catch (error: any) {
-    console.error('Update reward failed:', error)
-    return { data: null, error: error.message }
-  }
-}
-
 // Get all rewards for a business
-export async function getBusinessRewards(
-  businessId: string
-): Promise<{ data: Reward[] | null; error: string | null }> {
-  const supabase = createClientComponentClient()
-  
-  try {
-    const { data, error } = await supabase
-      .from('rewards')
-      .select('*')
-      .eq('business_id', businessId)
-      .order('created_at', { ascending: false })
+export async function getBusinessRewards(businessId: string): Promise<Reward[]> {
+  const { data, error } = await supabase
+    .from('rewards')
+    .select('*')
+    .eq('business_id', businessId)
+    .order('created_at', { ascending: false })
 
-    if (error) {
-      console.error('Database error:', error)
-      return { data: null, error: error.message }
-    }
-
-    return { data, error: null }
-  } catch (error: any) {
-    console.error('Get rewards failed:', error)
-    return { data: null, error: error.message }
+  if (error) {
+    console.error('Error fetching business rewards:', error)
+    throw new Error('Failed to fetch rewards')
   }
+
+  return data || []
+}
+
+// Create a new reward
+export async function createReward(reward: Omit<Reward, 'id' | 'created_at' | 'updated_at'>): Promise<Reward> {
+  const { data, error } = await supabase
+    .from('rewards')
+    .insert(reward)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating reward:', error)
+    throw new Error('Failed to create reward')
+  }
+
+  return data
+}
+
+// Update a reward
+export async function updateReward(id: string, updates: Partial<Reward>): Promise<Reward> {
+  const { data, error } = await supabase
+    .from('rewards')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating reward:', error)
+    throw new Error('Failed to update reward')
+  }
+
+  return data
 }
 
 // Delete a reward
-export async function deleteReward(
-  businessId: string,
-  rewardId: string
-): Promise<{ error: string | null }> {
-  const supabase = createClientComponentClient()
-  
-  try {
-    // First get the reward to check if it has an image
-    const { data: reward } = await supabase
-      .from('rewards')
-      .select('image_url')
-      .eq('id', rewardId)
-      .eq('business_id', businessId)
-      .single()
+export async function deleteReward(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('rewards')
+    .delete()
+    .eq('id', id)
 
-    // Delete the reward from database
-    const { error: deleteError } = await supabase
-      .from('rewards')
-      .delete()
-      .eq('id', rewardId)
-      .eq('business_id', businessId)
-
-    if (deleteError) {
-      console.error('Database error:', deleteError)
-      return { error: deleteError.message }
-    }
-
-    // Delete image from storage if it exists
-    if (reward?.image_url) {
-      const filePath = `${businessId}/rewards/${rewardId}`
-      await supabase.storage
-        .from('business-assets')
-        .remove([filePath])
-    }
-
-    return { error: null }
-  } catch (error: any) {
-    console.error('Delete reward failed:', error)
-    return { error: error.message }
+  if (error) {
+    console.error('Error deleting reward:', error)
+    throw new Error('Failed to delete reward')
   }
+}
+
+// Get available reward codes for a specific reward
+export async function getAvailableRewardCodes(rewardId: string): Promise<RewardCode[]> {
+  const { data, error } = await supabase
+    .from('reward_codes')
+    .select('*')
+    .eq('reward_id', rewardId)
+    .eq('is_used', false)
+    .is('customer_id', null)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching available reward codes:', error)
+    throw new Error('Failed to fetch reward codes')
+  }
+
+  return data || []
+}
+
+// Generate reward codes for a reward
+export async function generateRewardCodes(rewardId: string, count: number): Promise<RewardCode[]> {
+  const codes: Omit<RewardCode, 'id' | 'created_at'>[] = []
+  
+  for (let i = 0; i < count; i++) {
+    const code = generateRandomCode()
+    codes.push({
+      reward_id: rewardId,
+      code,
+      is_used: false,
+      status: 'available'
+    })
+  }
+
+  const { data, error } = await supabase
+    .from('reward_codes')
+    .insert(codes)
+    .select()
+
+  if (error) {
+    console.error('Error generating reward codes:', error)
+    throw new Error('Failed to generate reward codes')
+  }
+
+  return data || []
+}
+
+// Redeem a reward for a customer
+export async function redeemReward(customerId: string, rewardId: string, pointsUsed: number): Promise<RewardRedemption> {
+  // Get an available reward code
+  const { data: availableCodes, error: codeError } = await supabase
+    .from('reward_codes')
+    .select('*')
+    .eq('reward_id', rewardId)
+    .eq('is_used', false)
+    .is('customer_id', null)
+    .limit(1)
+
+  if (codeError) {
+    console.error('Error fetching available codes:', codeError)
+    throw new Error('Failed to find available reward codes')
+  }
+
+  if (!availableCodes || availableCodes.length === 0) {
+    throw new Error('No available reward codes for this reward')
+  }
+
+  const code = availableCodes[0]
+
+  // Start a transaction to update the code and create redemption
+  const { data: redemption, error: redemptionError } = await supabase
+    .from('reward_redemptions')
+    .insert({
+      customer_id: customerId,
+      reward_id: rewardId,
+      points_used: pointsUsed,
+      status: 'pending'
+    })
+    .select()
+    .single()
+
+  if (redemptionError) {
+    console.error('Error creating redemption:', redemptionError)
+    throw new Error('Failed to create reward redemption')
+  }
+
+  // Update the reward code
+  const { error: updateError } = await supabase
+    .from('reward_codes')
+    .update({
+      customer_id: customerId,
+      is_used: true,
+      used_at: new Date().toISOString(),
+      status: 'used'
+    })
+    .eq('id', code.id)
+
+  if (updateError) {
+    console.error('Error updating reward code:', updateError)
+    // TODO: Rollback the redemption if code update fails
+    throw new Error('Failed to assign reward code')
+  }
+
+  return redemption
+}
+
+// Get customer redemptions
+export async function getCustomerRedemptions(customerId: string): Promise<RewardRedemption[]> {
+  const { data, error } = await supabase
+    .from('reward_redemptions')
+    .select(`
+      *,
+      reward:rewards(*)
+    `)
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching customer redemptions:', error)
+    throw new Error('Failed to fetch redemptions')
+  }
+
+  return data || []
+}
+
+// Helper function to generate random codes
+function generateRandomCode(): string {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+  let result = ''
+  for (let i = 0; i < 8; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length))
+  }
+  return result
 }
 
 // Get default terms
