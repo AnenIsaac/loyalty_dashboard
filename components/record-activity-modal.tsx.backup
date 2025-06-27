@@ -1,0 +1,593 @@
+"use client"
+
+import React, { useState, useEffect } from "react"
+import { X, Check, Loader2, AlertCircle } from "lucide-react"
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+
+interface RecordActivityModalProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  businessId?: string
+  onSuccess?: () => void
+}
+
+interface FormData {
+  phoneNumber: string
+  name: string
+  amountSpent: string
+  awardPoints: boolean
+  note: string
+}
+
+// Phone number validation and formatting
+function formatTanzanianPhone(phone: string): string {
+  // Remove all non-digits
+  const digits = phone.replace(/\D/g, '')
+  
+  // Handle different input formats
+  if (digits.startsWith('255')) {
+    return `+${digits}`
+  } else if (digits.startsWith('0')) {
+    return `+255${digits.substring(1)}`
+  } else if (digits.length === 9) {
+    return `+255${digits}`
+  }
+  
+  return phone // Return as-is if can't format
+}
+
+function validateTanzanianPhone(phone: string): boolean {
+  const formatted = formatTanzanianPhone(phone)
+  return /^\+255\d{9}$/.test(formatted)
+}
+
+export function RecordActivityModal({ open, onOpenChange, businessId, onSuccess }: RecordActivityModalProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSuccess, setIsSuccess] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [pointsAwarded, setPointsAwarded] = useState(0)
+  const [formData, setFormData] = useState<FormData>({
+    phoneNumber: "",
+    name: "",
+    amountSpent: "",
+    awardPoints: false,
+    note: "",
+  })
+
+  const [validationErrors, setValidationErrors] = useState<Partial<FormData>>({})
+  const supabase = createClientComponentClient()
+
+  // Debug authentication context when modal opens
+  useEffect(() => {
+    if (open) {
+      const checkAuth = async () => {
+        console.log('🔐 [RecordActivity] Modal opened, checking auth context...')
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        console.log('🔐 [RecordActivity] Current user:', user ? { id: user.id, email: user.email } : 'Not authenticated')
+        console.log('🔐 [RecordActivity] Auth error:', authError)
+        console.log('🏢 [RecordActivity] Business ID provided:', businessId)
+        
+        // Test customer_points table access
+        console.log('🧪 [RecordActivity] Testing customer_points table access...')
+        const { data: testPoints, error: testError } = await supabase
+          .from('customer_points')
+          .select('count(*)')
+          .limit(1)
+        console.log('🧪 [RecordActivity] customer_points test result:', { testPoints, testError })
+        
+        // Test if we can query customer_points with business_id filter
+        if (businessId) {
+          console.log('🧪 [RecordActivity] Testing customer_points with business_id filter...')
+          const { data: businessPoints, error: businessPointsError } = await supabase
+            .from('customer_points')
+            .select('*')
+            .eq('business_id', businessId)
+            .limit(5)
+          console.log('🧪 [RecordActivity] business customer_points result:', { businessPoints, businessPointsError })
+        }
+      }
+      checkAuth()
+    }
+  }, [open, supabase, businessId])
+
+  // Test function for debugging customer_points table issues
+  const debugCustomerPointsTable = async () => {
+    console.log('🧪 [DEBUG] Starting customer_points table debug...')
+    
+    try {
+      // Check current user
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      console.log('🔐 [DEBUG] Current user:', user)
+      console.log('🔐 [DEBUG] Auth error:', authError)
+      
+      // Try to select from customer_points
+      console.log('📊 [DEBUG] Testing SELECT on customer_points...')
+      const { data: selectData, error: selectError } = await supabase
+        .from('customer_points')
+        .select('*')
+        .limit(3)
+      console.log('📊 [DEBUG] SELECT result:', { selectData, selectError })
+      
+      // Try to insert a test record
+      console.log('➕ [DEBUG] Testing INSERT on customer_points...')
+      const testInsert = {
+        customer_id: '00000000-0000-0000-0000-000000000000', // Dummy UUID
+        business_id: businessId || '00000000-0000-0000-0000-000000000000',
+        points: 1,
+        total_amount_spent: 1000,
+        phone_number: '+255700000000',
+        last_updated: new Date().toISOString()
+      }
+      console.log('➕ [DEBUG] Test insert data:', testInsert)
+      
+      const { data: insertData, error: insertError } = await supabase
+        .from('customer_points')
+        .insert(testInsert)
+        .select()
+      console.log('➕ [DEBUG] INSERT result:', { insertData, insertError })
+      
+      // If insert succeeded, delete the test record
+      if (insertData && insertData.length > 0) {
+        console.log('🗑️ [DEBUG] Cleaning up test record...')
+        const { error: deleteError } = await supabase
+          .from('customer_points')
+          .delete()
+          .eq('id', insertData[0].id)
+        console.log('🗑️ [DEBUG] DELETE result:', { deleteError })
+      }
+      
+    } catch (err) {
+      console.error('💥 [DEBUG] Debug function error:', err)
+    }
+  }
+
+  // Add debug button (only in development)
+  const isDevelopment = process.env.NODE_ENV === 'development'
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    
+    // Format phone number as user types
+    if (name === 'phoneNumber') {
+      const formatted = formatTanzanianPhone(value)
+      setFormData((prev) => ({ ...prev, [name]: formatted }))
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }))
+    }
+    
+    // Clear validation error when user starts typing
+    if (validationErrors[name as keyof FormData]) {
+      setValidationErrors((prev) => ({ ...prev, [name]: undefined }))
+    }
+    
+    // Clear general error
+    if (error) {
+      setError(null)
+    }
+  }
+
+  const handleCheckboxChange = (checked: boolean) => {
+    setFormData((prev) => ({ ...prev, awardPoints: checked }))
+  }
+
+  const validateForm = (): boolean => {
+    const errors: Partial<FormData> = {}
+    
+    // Phone number validation
+    if (!formData.phoneNumber.trim()) {
+      errors.phoneNumber = "Phone number is required"
+    } else if (!validateTanzanianPhone(formData.phoneNumber)) {
+      errors.phoneNumber = "Please enter a valid Tanzanian phone number (+255...)"
+    }
+    
+    // Name validation
+    if (!formData.name.trim()) {
+      errors.name = "Name is required"
+    }
+    
+    // Amount validation
+    if (!formData.amountSpent.trim()) {
+      errors.amountSpent = "Amount spent is required"
+    } else {
+      const amount = parseFloat(formData.amountSpent)
+      if (isNaN(amount) || amount <= 0) {
+        errors.amountSpent = "Amount must be greater than 0"
+      }
+    }
+    
+    setValidationErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    console.log('🚀 [RecordActivity] Form submission started')
+    console.log('📋 [RecordActivity] Form data:', formData)
+    console.log('🏢 [RecordActivity] Business ID:', businessId)
+    
+    if (!validateForm()) {
+      console.log('❌ [RecordActivity] Form validation failed')
+      return
+    }
+    
+    if (!businessId) {
+      console.log('❌ [RecordActivity] No business ID provided')
+      setError("Business ID is required")
+      return
+    }
+    
+    setIsSubmitting(true)
+    setError(null)
+
+    try {
+      const formattedPhone = formatTanzanianPhone(formData.phoneNumber)
+      const amountSpentNum = parseFloat(formData.amountSpent)
+      
+      console.log('📞 [RecordActivity] Formatted phone:', formattedPhone)
+      console.log('💰 [RecordActivity] Amount spent:', amountSpentNum)
+      
+      // Look up existing customer
+      console.log('👤 [RecordActivity] Looking up customer by phone...')
+      const { data: customerData, error: customerError } = await supabase
+        .from('customers')
+        .select('id, full_name')
+        .eq('phone_number', formattedPhone)
+        .limit(1)
+      
+      console.log('👤 [RecordActivity] Customer lookup result:', { customerData, customerError })
+      
+      if (customerError) {
+        console.error('❌ [RecordActivity] Customer lookup error:', customerError)
+        throw new Error('Database error occurred')
+      }
+      
+      const customer = customerData && customerData.length > 0 ? customerData[0] : null
+      const customer_id = customer ? customer.id : null
+      
+      console.log('👤 [RecordActivity] Customer found:', customer ? 'Yes' : 'No')
+      console.log('👤 [RecordActivity] Customer ID:', customer_id)
+      
+      // Calculate points if award_points is true
+      let points_awarded = 0
+      if (formData.awardPoints) {
+        console.log('🎯 [RecordActivity] Points will be awarded, getting business conversion rate...')
+        // Get business points conversion rate
+        const { data: businessData, error: businessError } = await supabase
+          .from('businesses')
+          .select('points_conversion')
+          .eq('id', businessId)
+          .limit(1)
+        
+        console.log('🏢 [RecordActivity] Business data result:', { businessData, businessError })
+        
+        if (businessError) {
+          console.error('❌ [RecordActivity] Business lookup error:', businessError)
+          throw new Error('Database error occurred')
+        }
+        
+        if (businessData && businessData.length > 0) {
+          const pointsConversion = businessData[0].points_conversion || 1000 // Default conversion rate
+          points_awarded = Math.round(amountSpentNum / pointsConversion)
+          console.log('🎯 [RecordActivity] Points conversion rate:', pointsConversion)
+          console.log('🎯 [RecordActivity] Points awarded:', points_awarded)
+        }
+      } else {
+        console.log('🎯 [RecordActivity] No points will be awarded (checkbox not checked)')
+      }
+      
+      // Insert interaction record
+      console.log('📝 [RecordActivity] Inserting interaction record...')
+      const interactionData = {
+        interaction_type: 'dashboard_entry',
+        amount_spent: amountSpentNum,
+        points_awarded,
+        customer_id,
+        phone_number: formattedPhone,
+        name: formData.name,
+        optional_note: formData.note.trim() || null,
+        business_id: businessId
+      }
+      console.log('📝 [RecordActivity] Interaction data to insert:', interactionData)
+      
+      const { data: insertedInteraction, error: interactionError } = await supabase
+        .from('customer_business_interactions')
+        .insert(interactionData)
+        .select('id')
+      
+      console.log('📝 [RecordActivity] Interaction insert result:', { insertedInteraction, interactionError })
+      
+      if (interactionError) {
+        console.error('❌ [RecordActivity] Interaction insert error:', interactionError)
+        throw new Error('Failed to record activity. Please try again.')
+      }
+      
+      console.log('✅ [RecordActivity] Interaction recorded successfully')
+      
+      // Update customer points if customer exists and points were awarded
+      if (customer_id && points_awarded > 0) {
+        console.log('🎯 [RecordActivity] Customer exists and points awarded, updating points...')
+        console.log('🎯 [RecordActivity] Customer ID for points update:', customer_id)
+        console.log('🎯 [RecordActivity] Business ID for points update:', businessId)
+        
+        // First, try to get existing points record
+        console.log('🔍 [RecordActivity] Looking up existing points record...')
+        const { data: existingPoints, error: pointsLookupError } = await supabase
+          .from('customer_points')
+          .select('points, total_amount_spent')
+          .eq('customer_id', customer_id)
+          .eq('business_id', businessId)
+          .limit(1)
+        
+        console.log('🔍 [RecordActivity] Points lookup result:', { existingPoints, pointsLookupError })
+        
+        if (pointsLookupError) {
+          console.error('❌ [RecordActivity] Points lookup error:', pointsLookupError)
+          console.log('⚠️ [RecordActivity] Continuing without updating points - interaction is already recorded')
+        } else {
+          if (existingPoints && existingPoints.length > 0) {
+            console.log('🔄 [RecordActivity] Existing points record found, updating...')
+            // Update existing points record
+            const currentPoints = existingPoints[0].points || 0
+            const currentSpent = existingPoints[0].total_amount_spent || 0
+            
+            console.log('🔄 [RecordActivity] Current points:', currentPoints)
+            console.log('🔄 [RecordActivity] Current spent:', currentSpent)
+            console.log('🔄 [RecordActivity] New points to add:', points_awarded)
+            console.log('🔄 [RecordActivity] New amount to add:', amountSpentNum)
+            
+            const updateData = {
+              points: currentPoints + points_awarded,
+              total_amount_spent: currentSpent + amountSpentNum,
+              last_updated: new Date().toISOString()
+            }
+            console.log('🔄 [RecordActivity] Points update data:', updateData)
+            
+            const { error: pointsUpdateError } = await supabase
+              .from('customer_points')
+              .update(updateData)
+              .eq('customer_id', customer_id)
+              .eq('business_id', businessId)
+            
+            console.log('🔄 [RecordActivity] Points update result:', { pointsUpdateError })
+            
+            if (pointsUpdateError) {
+              console.error('❌ [RecordActivity] Points update error:', pointsUpdateError)
+              console.log('⚠️ [RecordActivity] Continuing - interaction is recorded, points update failed')
+            } else {
+              console.log('✅ [RecordActivity] Points updated successfully')
+            }
+          } else {
+            console.log('➕ [RecordActivity] No existing points record, creating new one...')
+            
+            // Create new points record
+            const insertData = {
+              customer_id,
+              business_id: businessId,
+              points: points_awarded,
+              total_amount_spent: amountSpentNum,
+              phone_number: formattedPhone,
+              last_updated: new Date().toISOString()
+            }
+            console.log('➕ [RecordActivity] Points insert data:', insertData)
+            
+            const { error: pointsInsertError } = await supabase
+              .from('customer_points')
+              .insert(insertData)
+            
+            console.log('➕ [RecordActivity] Points insert result:', { pointsInsertError })
+            
+            if (pointsInsertError) {
+              console.error('❌ [RecordActivity] Points insert error:', pointsInsertError)
+              console.error('❌ [RecordActivity] Points insert error details:', {
+                code: pointsInsertError.code,
+                message: pointsInsertError.message,
+                details: pointsInsertError.details,
+                hint: pointsInsertError.hint
+              })
+              console.log('⚠️ [RecordActivity] Continuing - interaction is recorded, points creation failed')
+            } else {
+              console.log('✅ [RecordActivity] New points record created successfully')
+            }
+          }
+        }
+      } else {
+        if (!customer_id) {
+          console.log('ℹ️ [RecordActivity] No customer ID, skipping points update')
+        }
+        if (points_awarded <= 0) {
+          console.log('ℹ️ [RecordActivity] No points awarded, skipping points update')
+        }
+      }
+      
+      // Success!
+      console.log('🎉 [RecordActivity] All operations completed successfully')
+      setPointsAwarded(points_awarded)
+      setIsSuccess(true)
+      
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        console.log('📞 [RecordActivity] Calling onSuccess callback')
+        onSuccess()
+      }
+      
+      // Reset and close after showing success
+      setTimeout(() => {
+        console.log('🔄 [RecordActivity] Resetting form and closing modal')
+        setIsSuccess(false)
+        setPointsAwarded(0)
+        onOpenChange(false)
+        setFormData({
+          phoneNumber: "",
+          name: "",
+          amountSpent: "",
+          awardPoints: false,
+          note: "",
+        })
+        setValidationErrors({})
+      }, 2000)
+      
+    } catch (err) {
+      console.error('💥 [RecordActivity] Submit error:', err)
+      console.error('💥 [RecordActivity] Error details:', {
+        name: err instanceof Error ? err.name : 'Unknown',
+        message: err instanceof Error ? err.message : 'Unknown error',
+        stack: err instanceof Error ? err.stack : 'No stack trace'
+      })
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+    } finally {
+      console.log('🏁 [RecordActivity] Setting isSubmitting to false')
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleClose = () => {
+    if (!isSubmitting) {
+      onOpenChange(false)
+      setError(null)
+      setValidationErrors({})
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader className="flex items-center">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="absolute right-4 top-4" 
+            onClick={handleClose}
+            disabled={isSubmitting}
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+        </DialogHeader>
+
+        <div className="flex items-center gap-4 mb-4">
+          <div className="bg-[#F8843A] rounded-md p-4 flex items-center justify-center">
+            <div className="text-white text-3xl font-bold">+</div>
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Add Customer Activity</h2>
+          </div>
+        </div>
+
+        <p className="text-sm text-gray-500 mb-4">
+          Quickly add a new or returning customer to your loyalty program and record their purchase — even if they don't
+          have the app.
+        </p>
+
+        {error && (
+          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-md mb-4">
+            <AlertCircle className="h-4 w-4 text-red-500" />
+            <p className="text-sm text-red-700">{error}</p>
+          </div>
+        )}
+
+        {isSuccess ? (
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="rounded-full bg-orange-100 p-3 mb-4">
+              <Check className="h-8 w-8 text-[#F8843A]" />
+            </div>
+            <p className="text-lg font-medium text-center">Activity recorded successfully!</p>
+            {pointsAwarded > 0 && (
+              <p className="text-sm text-gray-600 mt-2">
+                {pointsAwarded} points awarded
+              </p>
+            )}
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Input
+                placeholder="Phone Number (+255...)"
+                name="phoneNumber"
+                value={formData.phoneNumber}
+                onChange={handleChange}
+                required
+                className={validationErrors.phoneNumber ? "border-red-500" : ""}
+              />
+              {validationErrors.phoneNumber && (
+                <p className="text-sm text-red-600">{validationErrors.phoneNumber}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Input 
+                placeholder="Name" 
+                name="name" 
+                value={formData.name} 
+                onChange={handleChange} 
+                required 
+                className={validationErrors.name ? "border-red-500" : ""}
+              />
+              {validationErrors.name && (
+                <p className="text-sm text-red-600">{validationErrors.name}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Input
+                placeholder="Amount Spent (TZS)"
+                name="amountSpent"
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.amountSpent}
+                onChange={handleChange}
+                required
+                className={validationErrors.amountSpent ? "border-red-500" : ""}
+              />
+              {validationErrors.amountSpent && (
+                <p className="text-sm text-red-600">{validationErrors.amountSpent}</p>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="award-points" 
+                checked={formData.awardPoints} 
+                onCheckedChange={handleCheckboxChange} 
+              />
+              <Label htmlFor="award-points">Award Points Now?</Label>
+            </div>
+
+            <div className="space-y-2">
+              <Textarea 
+                placeholder="Optional Note" 
+                name="note" 
+                value={formData.note} 
+                onChange={handleChange}
+                rows={3}
+              />
+            </div>
+
+            <Button 
+              type="submit" 
+              className="w-full bg-[#F8843A] hover:bg-[#E77A35]" 
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Recording...
+                </>
+              ) : (
+                "Record Activity"
+              )}
+            </Button>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
