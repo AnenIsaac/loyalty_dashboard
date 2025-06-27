@@ -33,7 +33,12 @@ interface Reward {
   expiresAt: string | null
 }
 
-export function RewardsPage() {
+interface RewardsPageProps {
+  user_id: string
+  business_id?: string
+}
+
+export function RewardsPage({ user_id, business_id }: RewardsPageProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [selectedReward, setSelectedReward] = useState<Reward | null>(null)
   const [activeTab, setActiveTab] = useState("rewards")
@@ -41,7 +46,6 @@ export function RewardsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [business, setBusiness] = useState<Business | null>(null)
   const [settings, setSettings] = useState<ZawadiiSettings | null>(null)
-  const [user, setUser] = useState<any>(null)
   const [codeCounts, setCodeCounts] = useState<{ [rewardId: string]: number }>({})
   const [isGeneratingCodes, setIsGeneratingCodes] = useState(false)
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false)
@@ -79,6 +83,13 @@ export function RewardsPage() {
   const [includeRedeemedCodes, setIncludeRedeemedCodes] = useState(false)
 
   const checkboxRef = useRef<HTMLInputElement>(null)
+
+  // Set business from business_id prop if available
+  useEffect(() => {
+    if (business_id && !business?.id) {
+      setBusiness({ id: business_id } as Business)
+    }
+  }, [business_id, business?.id])
 
     const loadRewards = async () => {
       try {
@@ -160,97 +171,76 @@ export function RewardsPage() {
       }
     }
 
-  useEffect(() => {
-    const fetchUserAndBusiness = async () => {
+useEffect(() => {
+  const fetchSettings = async () => {
+    try {
+      // Get zawadii settings (points conversion rate)
+      console.log('Fetching zawadii_settings...')
       try {
-        // Get current user
-        const { data: { user: currentUser } } = await supabase.auth.getUser()
-        if (!currentUser) {
-          throw new Error('No authenticated user')
-        }
-        setUser(currentUser)
-
-        // Get business data
-        const { data: businessData, error: businessError } = await supabase
-          .from('businesses')
+        const { data: settingsData, error: settingsError } = await supabase
+          .from('zawadii_settings')
           .select('*')
-          .eq('user_id', currentUser.id)
+          .eq('id', 1)
           .single()
 
-        if (businessError && businessError.code !== 'PGRST116') {
-          throw businessError
-        }
-        
-        setBusiness(businessData)
+        console.log('Settings data:', settingsData)
+        console.log('Settings error:', settingsError)
 
-        // Get zawadii settings (points conversion rate)
-        console.log('Fetching zawadii_settings...')
-        try {
-          const { data: settingsData, error: settingsError } = await supabase
+        if (settingsError) {
+          console.warn('Could not fetch zawadii settings:', settingsError)
+          
+          // Check if it's an RLS policy issue
+          if (settingsError.code === 'PGRST301' || settingsError.message?.includes('policy')) {
+            console.error('RLS Policy Error: zawadii_settings table needs read policies for authenticated users')
+            toast({
+              title: "Database Configuration Issue",
+              description: "Please run the zawadii_settings_policies.sql script to fix global settings access.",
+              variant: "destructive",
+            })
+          }
+          
+          // Try to fetch all records to see if table exists and has data
+          console.log('Trying to fetch all zawadii_settings records...')
+          const { data: allSettings, error: allError } = await supabase
             .from('zawadii_settings')
             .select('*')
-            .eq('id', 1)
-            .single()
+          
+          console.log('All settings:', allSettings)
+          console.log('All settings error:', allError)
 
-          console.log('Settings data:', settingsData)
-          console.log('Settings error:', settingsError)
-
-          if (settingsError) {
-            console.warn('Could not fetch zawadii settings:', settingsError)
-            
-            // Check if it's an RLS policy issue
-            if (settingsError.code === 'PGRST301' || settingsError.message?.includes('policy')) {
-              console.error('RLS Policy Error: zawadii_settings table needs read policies for authenticated users')
-              toast({
-                title: "Database Configuration Issue",
-                description: "Please run the zawadii_settings_policies.sql script to fix global settings access.",
-                variant: "destructive",
-              })
-            }
-            
-            // Try to fetch all records to see if table exists and has data
-            console.log('Trying to fetch all zawadii_settings records...')
-            const { data: allSettings, error: allError } = await supabase
-              .from('zawadii_settings')
-              .select('*')
-            
-            console.log('All settings:', allSettings)
-            console.log('All settings error:', allError)
-
-            // Don't set fallback settings if RLS is the issue - this masks the real problem
-            // Instead, keep settings as null so the UI shows the proper error message
-            if (settingsError.code === 'PGRST301' || settingsError.message?.includes('policy')) {
-              setSettings(null) // Keep null to show RLS error in UI
-            } else {
-              // Only set default for other types of errors
-              console.log('Setting default money_points_ratio to 1')
-              setSettings({ id: 1, money_points_ratio: 1 })
-            }
-            
+          // Don't set fallback settings if RLS is the issue - this masks the real problem
+          // Instead, keep settings as null so the UI shows the proper error message
+          if (settingsError.code === 'PGRST301' || settingsError.message?.includes('policy')) {
+            setSettings(null) // Keep null to show RLS error in UI
           } else {
-            setSettings(settingsData)
-            console.log('Settings state updated with database data:', settingsData)
+            // Only set default for other types of errors
+            console.log('Setting default money_points_ratio to 1')
+            setSettings({ id: 1, money_points_ratio: 1 })
           }
-        } catch (err) {
-          console.error('Error in settings fetch try/catch:', err)
-          // Set default settings on error
-          console.log('Setting default money_points_ratio to 1 due to error')
-          setSettings({ id: 1, money_points_ratio: 1 })
+          
+        } else {
+          setSettings(settingsData)
+          console.log('Settings state updated with database data:', settingsData)
         }
-        
-      } catch (error) {
-        console.error('Failed to fetch user/business data:', error)
-        toast({
-          title: "Error",
-          description: "Failed to load business data. Please try again.",
-          variant: "destructive",
-        })
+      } catch (err) {
+        console.error('Error in settings fetch try/catch:', err)
+        // Set default settings on error
+        console.log('Setting default money_points_ratio to 1 due to error')
+        setSettings({ id: 1, money_points_ratio: 1 })
       }
+      
+    } catch (error) {
+      console.error('Failed to fetch settings:', error)
+      toast({
+        title: "Error",
+        description: "Failed to load settings. Please try again.",
+        variant: "destructive",
+      })
     }
+  }
 
-    fetchUserAndBusiness()
-  }, [toast])
-
+  fetchSettings()
+}, [toast]) 
   // Load rewards when business data becomes available
   useEffect(() => {
     if (business?.id) {
