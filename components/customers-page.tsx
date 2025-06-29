@@ -33,6 +33,8 @@ import type {
   CustomerMetrics,
   Business
 } from "@/types/common"
+import { CustomersTable } from "./customers-table"
+import { supabase } from '@/lib/supabaseClient'
 
 interface CustomersPageProps extends BasePageProps {}
 
@@ -223,92 +225,164 @@ export function CustomersPage({ user_id, business_id }: CustomersPageProps) {
     loadRealData()
   }, [loadRealData])
 
-  // Derived state and calculations
+  // Derived state and calculations - UNIFIED CUSTOMER APPROACH
   const processedCustomers = useMemo(() => {
     const { business, interactions, customers, customerPoints, customerRewards } = data
     if (!business) return []
 
-    // Create a map to store processed customer data
-    const customerMap = new Map<string, any>()
+    // Create a map to store unified customer data using phone number as key
+    const unifiedCustomersMap = new Map<string, any>()
 
-    // CUSTOMER-POINTS-FIRST APPROACH: Start with customer_points records for this business
-    const businessCustomerPoints = customerPoints.filter(cp => cp.business_id === business.id)
+    // STEP 1: Process app customers from customers table
+    customers.forEach(customer => {
+      const phoneNumber = customer.phone_number
+      if (!phoneNumber) return
+
+      // Find customer_points record for this customer and business
+      const customerPoint = customerPoints.find(cp => 
+        cp.customer_id === customer.id && cp.business_id === business.id
+      )
+
+      // Get interactions for this customer and business
+      const customerInteractions = interactions.filter(i => 
+        i.customer_id === customer.id && i.business_id === business.id
+      )
+
+      // Calculate metrics
+      const totalVisits = customerInteractions.length
+      let lastVisitDate = 'Never'
+      if (totalVisits > 0) {
+        const sortedInteractions = [...customerInteractions].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+        lastVisitDate = new Date(sortedInteractions[0].created_at).toLocaleDateString('en-GB')
+      }
+
+      // Use customer_points data if available, otherwise calculate from interactions
+      const totalSpend = customerPoint ? customerPoint.total_amount_spent : 
+        customerInteractions.reduce((sum, i) => sum + (Number(i.amount_spent) || 0), 0)
+      const currentPoints = customerPoint ? customerPoint.points : 
+        customerInteractions.reduce((sum, i) => sum + (i.points_awarded || 0), 0)
+
+      unifiedCustomersMap.set(phoneNumber, {
+        id: customer.id,
+        name: customer.full_name || customer.nickname || 'Unknown',
+        phoneId: phoneNumber,
+        totalSpend: totalSpend.toLocaleString(),
+        totalVisits: totalVisits,
+        lastVisitDate: lastVisitDate,
+        points: currentPoints,
+        tag: '',
+        rpi: 0,
+        lei: 0,
+        spendingScore: 0,
+        source: 'app',
+        hasApp: true,
+        ...customer
+      })
+    })
+
+    // STEP 2: Process SMS-only customers from customer_interactions
+    // Group interactions by phone number for non-app customers
+    const smsInteractionsByPhone = new Map<string, CustomerInteraction[]>()
     
-    businessCustomerPoints.forEach((customerPoint) => {
-      const phoneNumber = customerPoint.phone_number
-      const customerId = customerPoint.customer_id
+    interactions
+      .filter(i => i.business_id === business.id && i.phone_number && !i.customer_id)
+      .forEach(interaction => {
+        const phoneNumber = interaction.phone_number!
+        
+        // Skip if this phone number already belongs to an app customer
+        if (unifiedCustomersMap.has(phoneNumber)) return
 
-      // Get customer name based on logic
-      let customerName = 'Unknown'
-      let actualPhoneNumber = phoneNumber
+        const existing = smsInteractionsByPhone.get(phoneNumber) || []
+        existing.push(interaction)
+        smsInteractionsByPhone.set(phoneNumber, existing)
+      })
 
-      if (customerId) {
-        // App customer - get name from customers table
-        const customer = customers.find(c => c.id === customerId)
-        if (customer) {
-          customerName = customer.full_name || customer.nickname || 'Unknown'
-          actualPhoneNumber = customer.phone_number
-        }
-      } else {
-        // Walk-in customer - get most recent name from interactions
+    // Process SMS-only customers
+    smsInteractionsByPhone.forEach((phoneInteractions, phoneNumber) => {
+      // Get most recent name from interactions
+      const sortedInteractions = [...phoneInteractions].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+      const customerName = sortedInteractions[0].name || 'Unknown'
+
+      // Calculate metrics
+      const totalSpend = phoneInteractions.reduce((sum, i) => sum + (Number(i.amount_spent) || 0), 0)
+      const totalPoints = phoneInteractions.reduce((sum, i) => sum + (i.points_awarded || 0), 0)
+      const totalVisits = phoneInteractions.length
+      const lastVisitDate = new Date(sortedInteractions[0].created_at).toLocaleDateString('en-GB')
+
+      // Create unique ID for SMS-only customer
+      const uniqueId = `sms_${phoneNumber.replace(/\+/g, '')}`
+
+      unifiedCustomersMap.set(phoneNumber, {
+        id: uniqueId,
+        name: customerName,
+        phoneId: phoneNumber,
+        totalSpend: totalSpend.toLocaleString(),
+        totalVisits: totalVisits,
+        lastVisitDate: lastVisitDate,
+        points: totalPoints,
+        tag: '',
+        rpi: 0,
+        lei: 0,
+        spendingScore: 0,
+        source: 'sms',
+        hasApp: false,
+        // Add interaction metadata
+        firstInteraction: new Date(phoneInteractions[phoneInteractions.length - 1].created_at),
+        lastInteraction: new Date(sortedInteractions[0].created_at)
+      })
+    })
+
+    // STEP 3: Handle customer_points records that might not have been covered above
+    // This catches any edge cases where customer_points exists but customer/interaction data is missing
+    customerPoints
+      .filter(cp => cp.business_id === business.id)
+      .forEach(customerPoint => {
+        const phoneNumber = customerPoint.phone_number
+        if (!phoneNumber || unifiedCustomersMap.has(phoneNumber)) return
+
+        // This is a customer_points record without corresponding customer or interaction data
+        // Use customer_points data and try to find any interactions
         const phoneInteractions = interactions.filter(i => 
           i.phone_number === phoneNumber && i.business_id === business.id
         )
+
+        let customerName = 'Unknown'
+        let lastVisitDate = 'Never'
+        let totalVisits = 0
+
         if (phoneInteractions.length > 0) {
           const sortedInteractions = [...phoneInteractions].sort(
             (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
           )
           customerName = sortedInteractions[0].name || 'Unknown'
+          lastVisitDate = new Date(sortedInteractions[0].created_at).toLocaleDateString('en-GB')
+          totalVisits = phoneInteractions.length
         }
-      }
 
-      // Calculate visits count from interactions that match business_id
-      let relevantInteractions: CustomerInteraction[] = []
-      if (customerId) {
-        // App customer - match by customer_id + business_id
-        relevantInteractions = interactions.filter(i => i.customer_id === customerId && i.business_id === business.id)
-      } else {
-        // Walk-in customer - match by phone_number + business_id
-        relevantInteractions = interactions.filter(i => i.phone_number === phoneNumber && i.business_id === business.id)
-      }
-      
-      const totalVisits = relevantInteractions.length
+        const uniqueId = customerPoint.customer_id || `points_${phoneNumber.replace(/\+/g, '')}`
 
-      // Calculate last visit date
-      let lastVisitDate = 'Never'
-      if (relevantInteractions.length > 0) {
-        const sortedInteractions = [...relevantInteractions].sort(
-          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        )
-        const lastVisit = new Date(sortedInteractions[0].created_at)
-        lastVisitDate = lastVisit.toLocaleDateString('en-GB')
-      }
-
-      // ✅ FIXED: Use customer_points data for total spend and points
-      const totalSpend = customerPoint.total_amount_spent
-      const currentPoints = customerPoint.points
-
-      // Create unique ID for the processed customer
-      const uniqueId = customerId || `phone_${phoneNumber.replace(/\+/g, '')}`
-
-      customerMap.set(uniqueId, {
-        id: uniqueId,
-        name: customerName,
-        phoneId: actualPhoneNumber,
-        totalSpend: totalSpend.toLocaleString(),  // ✅ From customer_points
-        totalVisits: totalVisits,                // From interactions count (business_id filtered)
-        lastVisitDate: lastVisitDate,            // From interactions (business_id filtered)
-        points: currentPoints,                   // ✅ From customer_points
-        tag: '', // Leave blank as requested
-        rpi: 0,  // Leave blank as requested
-        lei: 0,  // Leave blank as requested
-        spendingScore: 0,
-        // Keep original customer data if available
-        ...(customerId && customers.find(c => c.id === customerId) ? customers.find(c => c.id === customerId) : {})
+        unifiedCustomersMap.set(phoneNumber, {
+          id: uniqueId,
+          name: customerName,
+          phoneId: phoneNumber,
+          totalSpend: customerPoint.total_amount_spent.toLocaleString(),
+          totalVisits: totalVisits,
+          lastVisitDate: lastVisitDate,
+          points: customerPoint.points,
+          tag: '',
+          rpi: 0,
+          lei: 0,
+          spendingScore: 0,
+          source: customerPoint.customer_id ? 'app' : 'points',
+          hasApp: !!customerPoint.customer_id
+        })
       })
-    })
 
-    return Array.from(customerMap.values())
+    return Array.from(unifiedCustomersMap.values())
   }, [data])
 
   // Calculate metrics (using same logic as Reports page for consistency)
@@ -324,7 +398,7 @@ export function CustomersPage({ user_id, business_id }: CustomersPageProps) {
     }
 
     // Get business-specific customer points (same as Reports page)
-    const businessCustomerPoints = customerPoints.filter(cp => cp.business_id === business.id)
+    console.log("🔄 Processing unified customers for business:", business.id)
     const totalCustomers = businessCustomerPoints.length
 
     // Calculate new customers this month (same as Reports page)

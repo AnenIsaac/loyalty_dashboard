@@ -220,9 +220,35 @@ export function ReportsPage({ user_id, business_id }: ReportsPageProps) {
       }
     }
 
-    // Get business-specific customer points
-    const businessCustomerPoints = customerPoints.filter(cp => cp.business_id === business.id)
-    const totalCustomers = businessCustomerPoints.length
+    // UNIFIED CUSTOMER COUNT: Include both app users and SMS-only customers
+    const unifiedCustomersMap = new Map()
+
+    // Add app customers
+    customers.forEach(customer => {
+      if (customer.phone_number) {
+        const hasBusinessInteraction = interactions.some(i => 
+          i.customer_id === customer.id && i.business_id === business.id
+        )
+        if (hasBusinessInteraction) {
+          unifiedCustomersMap.set(customer.phone_number, customer)
+        }
+      }
+    })
+
+    // Add SMS-only customers
+    interactions
+      .filter(i => i.business_id === business.id && i.phone_number && !i.customer_id)
+      .forEach(interaction => {
+        if (!unifiedCustomersMap.has(interaction.phone_number)) {
+          unifiedCustomersMap.set(interaction.phone_number, { 
+            phone_number: interaction.phone_number,
+            created_at: interaction.created_at,
+            source: 'sms'
+          })
+        }
+      })
+
+    const totalCustomers = unifiedCustomersMap.size
 
     // Calculate new customers this month
     const oneMonthAgo = new Date()
