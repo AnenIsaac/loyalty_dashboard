@@ -499,6 +499,9 @@ export function CustomersPage({ user_id, business_id }: CustomersPageProps) {
       <div className="p-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-2xl font-bold">Customers</h1>
+        <p className="text-gray-600 mt-2">
+          Unified view of all customers including app users and SMS-only customers
+        </p>
           <Button onClick={handleRecordActivity} className="gap-2">
             <Plus className="h-4 w-4" />
             Record Activity
@@ -543,7 +546,9 @@ export function CustomersPage({ user_id, business_id }: CustomersPageProps) {
 
         {/* Total Customers */}
         <Card className="p-4">
-          <div className="text-sm text-gray-500 mb-2">Total Customers</div>
+          <div className="text-sm text-gray-500 mb-2">
+              Total Customers <span className="text-xs">(App + SMS)</span>
+            </div>
           <div className="flex items-center justify-between">
             <div className="text-3xl font-bold">{metrics.totalCustomers}</div>
             <Tooltip>
@@ -553,7 +558,7 @@ export function CustomersPage({ user_id, business_id }: CustomersPageProps) {
                 </Button>
               </TooltipTrigger>
               <TooltipContent className="max-w-48">
-                <p>Total number of unique customers who have interacted with your business</p>
+                <p>Total number of unique customers including both app users and SMS-only customers who have interacted with your business</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -573,7 +578,7 @@ export function CustomersPage({ user_id, business_id }: CustomersPageProps) {
                 </Button>
               </TooltipTrigger>
               <TooltipContent className="max-w-48">
-                <p>Number of new customers who joined your business in the last 30 days</p>
+                <p>Number of new customers (app registrations + first SMS interactions) in the last 30 days</p>
               </TooltipContent>
             </Tooltip>
           </div>

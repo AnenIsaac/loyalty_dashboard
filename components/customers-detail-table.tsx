@@ -34,6 +34,8 @@ interface ProcessedCustomer {
   rpi: number
   lei: number
   spendingScore?: number
+  source?: string
+  hasApp?: boolean
 }
 
 interface CustomersDetailTableProps {
@@ -391,6 +393,19 @@ export function CustomersDetailTable({
                   <TableRow key={customer.id}>
                     <TableCell>
                       <div className="font-medium">{customer.name}</div>
+                      {customer.source && (
+                        <div className="text-xs mt-1">
+                          <span className={`px-1.5 py-0.5 rounded text-xs ${
+                            customer.source === 'app' ? 'bg-green-100 text-green-700' :
+                            customer.source === 'sms' ? 'bg-blue-100 text-blue-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {customer.source === 'app' ? 'App User' : 
+                             customer.source === 'sms' ? 'SMS Only' : 
+                             'Points'}
+                          </span>
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>{customer.phoneId}</TableCell>
                     <TableCell>{customer.totalSpend} TZs</TableCell>
