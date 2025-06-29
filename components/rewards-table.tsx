@@ -35,12 +35,45 @@ export function RewardsTable({
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
-  const getCustomerName = (customerId: string): string => {
-    if (!customers || customers.length === 0) {
-      return 'Unknown'
+  const getCustomerName = (customerId: string, customerReward: any): string => {
+    // Debug logging
+    console.log('getCustomerName called with:', { customerId, customerReward })
+    
+    // First try to get customer name from the direct customer join
+    if (customerReward.customers?.full_name) {
+      console.log('Found customer name from direct join:', customerReward.customers.full_name)
+      return customerReward.customers.full_name
     }
-    const customer = customers.find(c => c.id === customerId)
-    return customer?.full_name || customer?.nickname || 'Unknown'
+    if (customerReward.customers?.nickname) {
+      console.log('Found customer nickname from direct join:', customerReward.customers.nickname)
+      return customerReward.customers.nickname
+    }
+    
+    // Then try to get customer name from the reward_codes join
+    if (customerReward.reward_codes?.customers?.full_name) {
+      console.log('Found customer name from reward_codes join:', customerReward.reward_codes.customers.full_name)
+      return customerReward.reward_codes.customers.full_name
+    }
+    if (customerReward.reward_codes?.customers?.nickname) {
+      console.log('Found customer nickname from reward_codes join:', customerReward.reward_codes.customers.nickname)
+      return customerReward.reward_codes.customers.nickname
+    }
+    
+    // Fallback to the customers array (legacy)
+    if (customers && customers.length > 0) {
+      const customer = customers.find(c => c.id === customerId)
+      if (customer?.full_name) {
+        console.log('Found customer name from customers array:', customer.full_name)
+        return customer.full_name
+      }
+      if (customer?.nickname) {
+        console.log('Found customer nickname from customers array:', customer.nickname)
+        return customer.nickname
+      }
+    }
+    
+    console.log('No customer name found, returning Unknown')
+    return 'Unknown'
   }
 
   const getStatusColor = (status: string): string => {
@@ -62,6 +95,11 @@ export function RewardsTable({
   console.log('RewardsTable - customerRewards length:', customerRewards?.length)
   if (customerRewards && customerRewards.length > 0) {
     console.log('RewardsTable - Sample reward:', customerRewards[0])
+    console.log('RewardsTable - Sample reward customer data:', {
+      directCustomer: customerRewards[0].customers,
+      rewardCodeCustomer: customerRewards[0].reward_codes?.customers,
+      customerId: customerRewards[0].customer_id
+    })
   }
   const processedRewards = useMemo((): ProcessedReward[] => {
     if (!customerRewards || customerRewards.length === 0) {
@@ -70,9 +108,9 @@ export function RewardsTable({
     
     const processed = customerRewards.map(reward => ({
       ...reward,
-      customerName: getCustomerName(reward.customer_id),
+      customerName: getCustomerName(reward.customer_id, reward),
       rewardTitle: reward.rewards?.title || 'Unknown Reward',
-      numericDate: new Date(reward.created_at).getTime()
+      numericDate: new Date(reward.claimed_at || reward.created_at).getTime()
     }))
 
     // Apply sorting
@@ -244,7 +282,7 @@ export function RewardsTable({
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {new Date(reward.created_at).toLocaleDateString('en-GB')}
+                    {new Date(reward.claimed_at || reward.created_at).toLocaleDateString('en-GB')}
                   </TableCell>
                 </TableRow>
               ))

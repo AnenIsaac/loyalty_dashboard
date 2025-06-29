@@ -86,7 +86,6 @@ export function CustomersPage({ user_id, business_id }: CustomersPageProps) {
       const [
         businessResult,
         interactionsResult,
-        customersResult,
         customerPointsResult,
         rewardsCatalogResult,
         customerRewardsResult
@@ -104,12 +103,6 @@ export function CustomersPage({ user_id, business_id }: CustomersPageProps) {
           .from('customer_business_interactions')
           .select('*')
           .eq('business_id', business_id)
-          .order('created_at', { ascending: false }),
-
-        // Fetch customers (app users)
-        supabase
-          .from('customers')
-          .select('*')
           .order('created_at', { ascending: false }),
 
         // Fetch customer points
@@ -142,10 +135,20 @@ export function CustomersPage({ user_id, business_id }: CustomersPageProps) {
               full_name,
               nickname,
               phone_number
+            ),
+            reward_codes!reward_code_id (
+              customer_id,
+              customers!customer_id (
+                id,
+                full_name,
+                nickname,
+                phone_number
+              )
             )
           `)
           .eq('business_id', business_id)
-          .order('created_at', { ascending: false })
+          .eq('status', 'redeemed')
+          .order('claimed_at', { ascending: false })
       ])
 
       // Check for errors
@@ -159,16 +162,10 @@ export function CustomersPage({ user_id, business_id }: CustomersPageProps) {
         throw new Error(`Failed to fetch interactions: ${interactionsResult.error.message}`)
       }
 
-      if (customersResult.error) {
-        console.error('Error fetching customers:', customersResult.error)
-        // Don't throw here as customers table might be empty
-        console.log('No customers found or error:', customersResult.error.message)
-
       if (customerPointsResult.error) {
         console.error('Error fetching customer points:', customerPointsResult.error)
         // Don't throw here as customer_points might be empty
         console.log('No customer points found or error:', customerPointsResult.error.message)
-      }
       }
 
       if (rewardsCatalogResult.error) {
@@ -179,6 +176,38 @@ export function CustomersPage({ user_id, business_id }: CustomersPageProps) {
       if (customerRewardsResult.error) {
         console.error('Error fetching customer rewards:', customerRewardsResult.error)
         // Don't throw here as there might be no rewards redeemed yet
+      }
+
+      // Now fetch only customers who have interacted with this business
+      let customersResult = { data: [], error: null }
+      if (interactionsResult.data && interactionsResult.data.length > 0) {
+        // Get unique customer IDs from interactions
+        const customerIds = [...new Set(
+          interactionsResult.data
+            .filter(i => i.customer_id) // Only app users have customer_id
+            .map(i => i.customer_id)
+        )]
+
+        if (customerIds.length > 0) {
+          console.log('Fetching customers with interactions:', customerIds)
+          customersResult = await supabase
+            .from('customers')
+            .select('*')
+            .in('id', customerIds)
+            .order('created_at', { ascending: false })
+        } else {
+          console.log('No app customers found in interactions')
+          customersResult = { data: [], error: null }
+        }
+      } else {
+        console.log('No interactions found, no customers to fetch')
+        customersResult = { data: [], error: null }
+      }
+
+      if (customersResult.error) {
+        console.error('Error fetching customers:', customersResult.error)
+        // Don't throw here as customers table might be empty
+        console.log('No customers found or error:', customersResult.error.message)
       }
 
       console.log('CustomersPage - Data fetched successfully:', {
