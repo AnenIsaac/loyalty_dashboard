@@ -145,26 +145,64 @@ export async function signOut() {
 
 export async function resetPassword(email: string) {
   try {
+    console.log('Starting password reset for:', email)
+    
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/auth/reset-password`,
     })
     
-    if (error) throw error
+    if (error) {
+      console.error('Password reset error:', error)
+      
+      // Provide user-friendly error messages
+      let userMessage = error.message
+      if (error.message.includes('Invalid email')) {
+        userMessage = 'Please enter a valid email address'
+      } else if (error.message.includes('rate limit')) {
+        userMessage = 'Too many reset attempts. Please try again later'
+      } else if (error.message.includes('User not found')) {
+        userMessage = 'No account found with this email address'
+      }
+      
+      throw new Error(userMessage)
+    }
+    
+    console.log('Password reset email sent successfully')
     return { error: null }
   } catch (error: any) {
+    console.error('Password reset failed:', error)
     return { error: { message: error.message } as AuthError }
   }
 }
 
 export async function updatePassword(newPassword: string) {
   try {
+    console.log('Starting password update')
+    
     const { error } = await supabase.auth.updateUser({
       password: newPassword
     })
     
-    if (error) throw error
+    if (error) {
+      console.error('Password update error:', error)
+      
+      // Provide user-friendly error messages
+      let userMessage = error.message
+      if (error.message.includes('Password should be at least')) {
+        userMessage = 'Password must be at least 6 characters long'
+      } else if (error.message.includes('Invalid password')) {
+        userMessage = 'Password does not meet security requirements'
+      } else if (error.message.includes('User not found')) {
+        userMessage = 'User session expired. Please request a new reset link'
+      }
+      
+      throw new Error(userMessage)
+    }
+    
+    console.log('Password updated successfully')
     return { error: null }
   } catch (error: any) {
+    console.error('Password update failed:', error)
     return { error: { message: error.message } as AuthError }
   }
 }
@@ -204,5 +242,39 @@ export async function resendOtp(email: string) {
   } catch (error: any) {
     console.error('Resend OTP failed:', error)
     return { error: { message: error.message } as AuthError }
+  }
+}
+
+export async function verifyPasswordResetOtp(email: string, token: string) {
+  try {
+    console.log('Verifying password reset OTP for:', email)
+    
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'recovery'
+    })
+    
+    if (error) {
+      console.error('Password reset OTP verification error:', error)
+      
+      // Provide user-friendly error messages
+      let userMessage = error.message
+      if (error.message.includes('Invalid OTP')) {
+        userMessage = 'Invalid verification code. Please check and try again.'
+      } else if (error.message.includes('expired')) {
+        userMessage = 'Verification code has expired. Please request a new one.'
+      } else if (error.message.includes('rate limit')) {
+        userMessage = 'Too many verification attempts. Please try again later.'
+      }
+      
+      throw new Error(userMessage)
+    }
+    
+    console.log('Password reset OTP verified successfully')
+    return { data, error: null }
+  } catch (error: any) {
+    console.error('Password reset OTP verification failed:', error)
+    return { data: null, error: { message: error.message } as AuthError }
   }
 }

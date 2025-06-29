@@ -11,6 +11,14 @@ export interface SignUpData {
     password: string
   }
   
+  export interface ResetPasswordData {
+    email: string
+  }
+  
+  export interface UpdatePasswordData {
+    password: string
+  }
+  
   export interface AuthError {
     message: string
     field?: string
