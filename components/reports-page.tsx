@@ -128,7 +128,8 @@ export function ReportsPage({ user_id, business_id }: ReportsPageProps) {
             )
           `)
           .eq('business_id', business_id)
-          .order('created_at', { ascending: false })      ])
+          .eq('status', 'redeemed')
+          .order('claimed_at', { ascending: false })      ])
 
       // Check for errors
       if (businessResult.error) {

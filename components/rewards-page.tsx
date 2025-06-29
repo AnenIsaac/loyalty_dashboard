@@ -62,7 +62,7 @@ export function RewardsPage({ user_id, business_id }: RewardsPageProps) {
   // Codes tab state
   const [allCodes, setAllCodes] = useState<any[]>([])
   const [filteredCodes, setFilteredCodes] = useState<any[]>([])
-  const [codeFilter, setCodeFilter] = useState<'all' | 'unused' | 'redeemed'>('all')
+  const [codeFilter, setCodeFilter] = useState<'all' | 'unused' | 'redeemed'>('redeemed')
   const [codeSearchQuery, setCodeSearchQuery] = useState('')
   const [isLoadingCodes, setIsLoadingCodes] = useState(false)
   const [codeToDelete, setCodeToDelete] = useState<any>(null)
