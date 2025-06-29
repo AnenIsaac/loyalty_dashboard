@@ -19,14 +19,14 @@ export function SortMenu({ onSort }: SortMenuProps) {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
   const [open, setOpen] = useState(false)
 
-  const sortOptions: SortOption[] = [
+  const sortOptions = [
+    { label: "Customer", value: "name" },
+    { label: "Phone", value: "phoneId" },
     { label: "Total Spend", value: "totalSpend" },
     { label: "Total Visits", value: "totalVisits" },
     { label: "Last Visit Date", value: "lastVisitDate" },
     { label: "Points", value: "points" },
-    { label: "Tag", value: "tag" },
-    { label: "Reward Priority Index (RPI)", value: "rpi" },
-    { label: "Loyalty Engagement Index (LEI)", value: "lei" },
+    { label: "Secondary Status", value: "secondaryStatus" },
   ]
 
   const handleSort = (option: SortOption) => {

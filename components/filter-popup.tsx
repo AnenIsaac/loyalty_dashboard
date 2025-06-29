@@ -28,12 +28,10 @@ export function FilterPopup({ onFilter }: FilterPopupProps) {
     "Total Visits", 
     "Last Visit Date",
     "Points",
-    "Tag",
-    "Reward Priority Index (RPI)",
-    "Loyalty Engagement Index (LEI)"
+    "Secondary Status"
   ]
 
-  const tagOptions = ["Active", "Send Promotion", "Inactive", "VIP", "New"]
+  const statusOptions = ["Active", "At Risk", "Lapsed"]
 
   const handleAddFilter = () => {
     const newFilter = {
@@ -74,17 +72,17 @@ export function FilterPopup({ onFilter }: FilterPopupProps) {
   }, [open])
 
   const getFilterInput = (filter: FilterOption) => {
-    // Special handling for Tag field
-    if (filter.field === "Tag") {
+    // Special handling for Secondary Status field
+    if (filter.field === "Secondary Status") {
       return (
         <Select value={filter.value} onValueChange={(value) => handleFilterChange(filter.id, "value", value)}>
           <SelectTrigger>
-            <SelectValue placeholder="Select tag" />
+            <SelectValue placeholder="Select status" />
           </SelectTrigger>
           <SelectContent>
-            {tagOptions.map((tag) => (
-              <SelectItem key={tag} value={tag}>
-                {tag}
+            {statusOptions.map((status) => (
+              <SelectItem key={status} value={status}>
+                {status}
               </SelectItem>
             ))}
           </SelectContent>
@@ -113,10 +111,6 @@ export function FilterPopup({ onFilter }: FilterPopupProps) {
           return "Enter visits (e.g. 5)"
         case "Points":
           return "Enter points (e.g. 100)"
-        case "Reward Priority Index (RPI)":
-          return "Enter RPI (e.g. 150)"
-        case "Loyalty Engagement Index (LEI)":
-          return "Enter LEI (e.g. 120)"
         default:
           return "Enter value"
       }
@@ -133,8 +127,8 @@ export function FilterPopup({ onFilter }: FilterPopupProps) {
   }
 
   const getOperatorOptions = (filter: FilterOption) => {
-    // Tag field doesn't need operators - it's exact match
-    if (filter.field === "Tag") {
+    // Secondary Status field doesn't need operators - it's exact match
+    if (filter.field === "Secondary Status") {
       return null
     }
 
@@ -191,7 +185,7 @@ export function FilterPopup({ onFilter }: FilterPopupProps) {
                     </SelectContent>
                   </Select>
                 </div>
-                {filter.field !== "Tag" && (
+                {filter.field !== "Secondary Status" && (
                   <div className="flex-1">
                     {getOperatorOptions(filter)}
                   </div>

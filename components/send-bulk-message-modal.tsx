@@ -26,9 +26,10 @@ interface ProcessedCustomer {
   lastVisitDate: string
   points: number
   tag: string
-  rpi: number
-  lei: number
+  secondaryStatus: 'Active' | 'At Risk' | 'Lapsed' | null
   spendingScore?: number
+  source?: string
+  hasApp?: boolean
 }
 
 interface SendBulkMessageModalProps {
@@ -77,13 +78,8 @@ export function SendBulkMessageModal({
         return false
       }
 
-      // Handle tag comparisons (exact match)
-      if (fieldName === "tag") {
-        return customerValue.toString().toLowerCase() === filter.value.toLowerCase()
-      }
-
       // Convert to number for numeric comparisons (remove commas)
-      if (["totalSpend", "points", "rpi", "lei", "totalVisits", "spendingScore"].includes(fieldName)) {
+      if (["totalSpend", "points", "totalVisits", "spendingScore"].includes(fieldName)) {
         const numValue = typeof customerValue === 'string' ? 
           Number(customerValue.toString().replace(/,/g, '')) : 
           Number(customerValue)
@@ -96,6 +92,11 @@ export function SendBulkMessageModal({
         } else {
           return numValue < filterValue
         }
+      }
+
+      // Handle secondary status comparisons (exact match)
+      if (fieldName === "secondaryStatus") {
+        return customerValue.toString().toLowerCase() === filter.value.toLowerCase()
       }
 
       // Handle date comparisons
@@ -142,9 +143,9 @@ export function SendBulkMessageModal({
 
     try {
       // Prepare recipients for SMS API
-      const recipients = filteredCustomers.map(customer => ({
+      const recipients = filteredCustomers.map((customer, index) => ({
         phone: customer.phoneId,
-        id: customer.id
+        id: index + 1  // Use numeric ID starting from 1
       }))
 
       // Send bulk SMS via our API

@@ -109,15 +109,16 @@ export interface CustomerPoint {
 
 export interface ProcessedCustomer extends Customer {
   totalSpend: string
-  totalVisits: string
+  totalVisits: number
   lastVisitDate: string
-  points: string
+  points: number
   tag: string
-  rpi: string
-  lei: string
+  secondaryStatus: 'Active' | 'At Risk' | 'Lapsed' | null
   spendingScore: number
   phoneId: string
   name: string
+  source?: string
+  hasApp?: boolean
 }
 
 export interface FilterOption {

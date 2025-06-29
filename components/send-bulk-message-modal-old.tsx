@@ -28,9 +28,10 @@ interface ProcessedCustomer {
   lastVisitDate: string
   points: number
   tag: string
-  rpi: number
-  lei: number
+  secondaryStatus: 'Active' | 'At Risk' | 'Lapsed' | null
   spendingScore?: number
+  source?: string
+  hasApp?: boolean
 }
 
 interface SendBulkMessageModalProps {

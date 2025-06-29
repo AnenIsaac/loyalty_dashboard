@@ -13,30 +13,9 @@ import { FilterPopup } from "@/components/filter-popup"
 import { SendMessageModal } from "@/components/send-message-modal"
 import { SendBulkMessageModal } from "@/components/send-bulk-message-modal"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type { ProcessedCustomer, FilterOption } from "@/types/common"
 
 // Types and interfaces
-interface FilterOption {
-  id: number
-  field: string
-  operator: "greater" | "less"
-  value: string
-}
-
-interface ProcessedCustomer {
-  id: string
-  name: string
-  phoneId: string
-  totalSpend: string
-  totalVisits: number
-  lastVisitDate: string
-  points: number
-  tag: string
-  rpi: number
-  lei: number
-  spendingScore?: number
-  source?: string
-  hasApp?: boolean
-}
 
 interface CustomersDetailTableProps {
   customers: ProcessedCustomer[]
@@ -79,9 +58,7 @@ export function CustomersDetailTable({
     "Total Visits": "totalVisits",
     "Last Visit Date": "lastVisitDate",
     Points: "points",
-    Tag: "tag",
-    "Reward Priority Index (RPI)": "rpi",
-    "Loyalty Engagement Index (LEI)": "lei",
+    "Secondary Status": "secondaryStatus",
   }
 
   // Define sortable columns with their field mappings
@@ -92,9 +69,7 @@ export function CustomersDetailTable({
     { label: "Visits", field: "totalVisits" },
     { label: "Last Visit", field: "lastVisitDate" },
     { label: "Points", field: "points" },
-    { label: "Tag", field: "tag" },
-    { label: "RPI", field: "rpi" },
-    { label: "LEI", field: "lei" },
+    { label: "Status", field: "secondaryStatus" },
   ]
 
   // Handle column header click for sorting
@@ -154,13 +129,8 @@ export function CustomersDetailTable({
             return false
           }
 
-          // Handle tag comparisons (exact match)
-          if (fieldName === "tag") {
-            return customerValue.toString().toLowerCase() === filter.value.toLowerCase()
-          }
-
           // Convert to number for numeric comparisons (remove commas)
-          if (["totalSpend", "points", "rpi", "lei", "totalVisits", "spendingScore"].includes(fieldName)) {
+          if (["totalSpend", "points", "totalVisits", "spendingScore"].includes(fieldName)) {
             const numValue = typeof customerValue === 'string' ? 
               Number(customerValue.toString().replace(/,/g, '')) : 
               Number(customerValue)
@@ -173,6 +143,11 @@ export function CustomersDetailTable({
             } else {
               return numValue < filterValue
             }
+          }
+
+          // Handle secondary status comparisons (exact match)
+          if (fieldName === "secondaryStatus") {
+            return customerValue.toString().toLowerCase() === filter.value.toLowerCase()
           }
 
           // Handle date comparisons
@@ -214,7 +189,7 @@ export function CustomersDetailTable({
     if (sortField) {
       filteredCustomers.sort((a, b) => {
         // Handle numeric fields
-        if (["totalSpend", "points", "rpi", "lei", "totalVisits", "spendingScore"].includes(sortField)) {
+        if (["totalSpend", "points", "totalVisits", "spendingScore"].includes(sortField)) {
           const aValue = typeof a[sortField as keyof ProcessedCustomer] === 'string' ?
             Number((a[sortField as keyof ProcessedCustomer] || '').toString().replace(/,/g, '')) :
             Number(a[sortField as keyof ProcessedCustomer] || 0)
@@ -283,23 +258,6 @@ export function CustomersDetailTable({
   const handlePageSizeChange = useCallback((newPageSize: string) => {
     setPageSize(Number(newPageSize))
     setCurrentPage(1) // Reset to first page when changing page size
-  }, [])
-
-  const getTagColor = useCallback((tag: string): string => {
-    switch (tag.toLowerCase()) {
-      case 'send promotion':
-        return 'bg-orange-100 text-orange-800'
-      case 'active':
-        return 'bg-green-100 text-green-800'
-      case 'inactive':
-        return 'bg-red-100 text-red-800'
-      case 'vip':
-        return 'bg-purple-100 text-purple-800'
-      case 'new':
-        return 'bg-blue-100 text-blue-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
   }, [])
 
   // SECTION 2: Loading and Error States
@@ -417,12 +375,10 @@ export function CustomersDetailTable({
                       </span>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getTagColor(customer.tag)}>
-                        {customer.tag}
+                      <Badge className={`${customer.secondaryStatus === 'Active' ? 'bg-green-100 text-green-800' : customer.secondaryStatus === 'At Risk' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'}`}>
+                        {customer.secondaryStatus}
                       </Badge>
                     </TableCell>
-                    <TableCell>{customer.rpi}</TableCell>
-                    <TableCell>{customer.lei}</TableCell>
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

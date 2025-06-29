@@ -299,7 +299,7 @@ export function SendMessageModal({ open, onOpenChange, customer, businessId }: S
         body: JSON.stringify({
           recipients: [{
             phone: customer.phoneId,
-            id: customer.name.replace(/\s+/g, '_').toLowerCase()
+            id: 1  // Use numeric ID as expected by the API
           }],
           message: finalMessage
         })

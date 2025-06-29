@@ -250,13 +250,20 @@ export function ReportsPage({ user_id, business_id }: ReportsPageProps) {
 
     const totalCustomers = unifiedCustomersMap.size
 
-    // Calculate new customers this month
+    // Calculate new customers this month using unified approach
     const oneMonthAgo = new Date()
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1)
     
-    const newCustomersThisMonth = businessCustomerPoints.filter(cp => {
-      const createdDate = new Date(cp.created_at)
-      return createdDate >= oneMonthAgo
+    const newCustomersThisMonth = Array.from(unifiedCustomersMap.values()).filter(customer => {
+      if (customer.source === 'sms') {
+        // For SMS-only customers, use their first interaction date
+        const createdDate = new Date(customer.created_at)
+        return createdDate >= oneMonthAgo
+      } else {
+        // For app customers, use their registration date
+        const createdDate = new Date(customer.created_at)
+        return createdDate >= oneMonthAgo
+      }
     }).length
 
     // Calculate average spend per visit from business interactions
@@ -345,7 +352,7 @@ export function ReportsPage({ user_id, business_id }: ReportsPageProps) {
 
           {/* Total Customers */}
           <Card className="p-4">
-            <div className="text-sm text-gray-500 mb-2">Total Customers</div>
+            <div className="text-sm text-gray-500 mb-2">Total Customers <span className="text-xs">(App + SMS)</span></div>
             <div className="flex items-center justify-between">
               <div className="text-3xl font-bold">{metrics.totalCustomers}</div>
               <Tooltip>
@@ -355,7 +362,7 @@ export function ReportsPage({ user_id, business_id }: ReportsPageProps) {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-48">
-                  <p>Total number of unique customers who have interacted with your business</p>
+                  <p>Total number of unique customers including both app users and SMS-only customers who have interacted with your business</p>
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -375,7 +382,7 @@ export function ReportsPage({ user_id, business_id }: ReportsPageProps) {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-48">
-                  <p>Number of new customers who joined your business in the last 30 days</p>
+                  <p>Number of new customers (app registrations + first SMS interactions) in the last 30 days</p>
                 </TooltipContent>
               </Tooltip>
             </div>

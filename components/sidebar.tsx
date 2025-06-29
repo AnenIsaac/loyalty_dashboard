@@ -2,11 +2,12 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { BarChart, Users, Gift, Briefcase, HelpCircle, Settings, LifeBuoy, LogOut, Building2 } from "lucide-react"
+import { BarChart, Users, Gift, Briefcase, LifeBuoy, LogOut, Building2 } from "lucide-react"
 import Image from "next/image"
 import { useState, useEffect } from 'react'
 import { useSession, useSupabaseClient } from '@supabase/auth-helpers-react'
 import { signOut } from '@/lib/auth'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 interface BusinessData {
   name: string
@@ -16,8 +17,9 @@ interface BusinessData {
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const supabase = createClientComponentClient()
-  const { user } = useAuth()
+  const session = useSession()
+  const supabase = useSupabaseClient()
+  const user = session?.user
   const [businessData, setBusinessData] = useState<BusinessData | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -137,23 +139,7 @@ export function Sidebar() {
           
           <div className="mt-2 space-y-1">
             <Link 
-              href="#" 
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-            >
-              <HelpCircle className="h-4 w-4" />
-              Getting Started
-            </Link>
-
-            <Link 
-              href="#" 
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-            >
-              <Settings className="h-4 w-4" />
-              Settings
-            </Link>
-
-            <Link 
-              href="#" 
+              href="/support" 
               className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors text-gray-500 hover:bg-gray-100 hover:text-gray-900"
             >
               <LifeBuoy className="h-4 w-4" />
