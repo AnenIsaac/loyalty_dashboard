@@ -12,6 +12,7 @@ interface ActivityChartProps {
 
 interface ChartData {
   name: string
+  key: string
   value: number
 }
 
@@ -97,10 +98,10 @@ export function ActivityChart({ timeFrame, businessId }: ActivityChartProps) {
             startDate.setDate(startDate.getDate() - 30)
         }
 
-        // Fetch interactions from the date range
+        // Fetch interactions with amount_spent from the date range
         const { data: interactions, error } = await supabase
           .from('customer_business_interactions')
-          .select('created_at')
+          .select('created_at, amount_spent')
           .eq('business_id', businessId)
           .gte('created_at', startDate.toISOString())
           .order('created_at', { ascending: true })
@@ -111,12 +112,13 @@ export function ActivityChart({ timeFrame, businessId }: ActivityChartProps) {
           return
         }
 
-        // Initialize periods with zero counts
-        const periodCounts = new Map(generateTimePeriods.map(p => [p.key, 0]))
+        // Initialize periods with zero revenue
+        const periodRevenue = new Map(generateTimePeriods.map(p => [p.key, 0]))
 
-        // Count interactions by time period
+        // Sum revenue by time period
         interactions?.forEach((interaction: CustomerInteraction) => {
           const date = new Date(interaction.created_at)
+          const amountSpent = Number(interaction.amount_spent) || 0
           let key: string
 
           switch (timeFrame) {
@@ -134,15 +136,15 @@ export function ActivityChart({ timeFrame, businessId }: ActivityChartProps) {
               key = date.toISOString().split('T')[0]
           }
 
-          if (periodCounts.has(key)) {
-            periodCounts.set(key, (periodCounts.get(key) || 0) + 1)
+          if (periodRevenue.has(key)) {
+            periodRevenue.set(key, (periodRevenue.get(key) || 0) + amountSpent)
           }
         })
 
-        // Update data with actual counts
+        // Update data with actual revenue
         const updatedData = generateTimePeriods.map(period => ({
           ...period,
-          value: periodCounts.get(period.key) || 0
+          value: periodRevenue.get(period.key) || 0
         }))
 
         setData(updatedData)
@@ -170,6 +172,16 @@ export function ActivityChart({ timeFrame, businessId }: ActivityChartProps) {
     }
   }, [timeFrame])
 
+  // Format revenue values for display
+  const formatRevenue = (value: number) => {
+    if (value >= 1000000) {
+      return `${(value / 1000000).toFixed(1)}M`
+    } else if (value >= 1000) {
+      return `${(value / 1000).toFixed(1)}K`
+    }
+    return value.toString()
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[300px]">
@@ -195,9 +207,9 @@ export function ActivityChart({ timeFrame, businessId }: ActivityChartProps) {
           fontSize={12} 
           tickLine={false} 
           axisLine={false} 
-          tickFormatter={(value) => `${value}`}
+          tickFormatter={formatRevenue}
           label={{ 
-            value: 'Number of Visits', 
+            value: 'Revenue (TZS)', 
             angle: -90, 
             position: 'insideLeft',
             style: { textAnchor: 'middle', fontSize: '12px', fill: '#888888' }
